@@ -1,0 +1,100 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: sentinel_secret
+      POSTGRES_DB: sentinel_ai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentinel_ai"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+  backend:
+    build: ./backend
+    ports:
+      - "0.0.0.0:8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sentinel:sentinel_secret@postgres:5432/sentinel_ai
+      REDIS_URL: redis://redis:6379/0
+      MQTT_BROKER: mqtt://mqtt:1883
+      SECRET_KEY: change-me-in-production-use-openssl-rand
+      EDGE_AI_URL: http://edge-ai:8001
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+    volumes:
+      - evidence_data:/app/data/evidence
+      - baseline_data:/app/data/baselines
+      - ./data:/app/data/host-network:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  edge-ai:
+    build: ./edge-ai
+    ports:
+      - "8001:8001"
+    environment:
+      BACKEND_URL: http://backend:8000
+      MQTT_BROKER: mqtt://mqtt:1883
+      MODEL_CACHE: /app/models
+    volumes:
+      - evidence_data:/app/data/evidence
+      - baseline_data:/app/data/baselines
+      - model_cache:/app/models
+    depends_on:
+      - backend
+      - mqtt
+    # Uncomment for GPU (Jetson/NVIDIA)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "0.0.0.0:3000:80"
+    depends_on:
+      - backend
+
+  # Host IP for mobile camera links (set before docker compose up):
+  # PowerShell: $env:PUBLIC_BASE_URL="http://192.168.31.128:3000"
+
+volumes:
+  postgres_data:
+  evidence_data:
+  baseline_data:
+  model_cache:

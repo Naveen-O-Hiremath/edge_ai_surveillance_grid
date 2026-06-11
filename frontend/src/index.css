@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-surface-border;
+  }
+  body {
+    @apply bg-surface text-gray-100;
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(0, 153, 230, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(99, 102, 241, 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 100%, rgba(0, 153, 230, 0.04) 0%, transparent 50%);
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-surface-card/80 backdrop-blur-xl border border-surface-border rounded-xl;
+  }
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300 hover:border-sentinel-500/30 hover:shadow-lg hover:shadow-sentinel-500/5;
+  }
+  .btn-primary {
+    @apply px-4 py-2 bg-sentinel-600 hover:bg-sentinel-500 text-white rounded-lg font-medium transition-all duration-200 hover:shadow-lg hover:shadow-sentinel-500/25;
+  }
+  .btn-ghost {
+    @apply px-4 py-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all duration-200;
+  }
+  .input-field {
+    @apply w-full px-4 py-2.5 bg-surface-elevated border border-surface-border rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:border-sentinel-500/50 focus:ring-1 focus:ring-sentinel-500/25 transition-all;
+  }
+  .severity-critical { @apply text-threat-critical bg-threat-critical/10 border-threat-critical/30; }
+  .severity-high { @apply text-threat-high bg-threat-high/10 border-threat-high/30; }
+  .severity-medium { @apply text-threat-medium bg-threat-medium/10 border-threat-medium/30; }
+  .severity-low { @apply text-threat-low bg-threat-low/10 border-threat-low/30; }
+  .severity-info { @apply text-threat-info bg-threat-info/10 border-threat-info/30; }
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
