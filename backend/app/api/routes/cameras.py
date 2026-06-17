@@ -39,8 +39,11 @@ def _base_url(request: Request) -> str:
 @router.get("", response_model=list[CameraResponse])
 async def list_cameras(request: Request, db: AsyncSession = Depends(get_db), _: User = Depends(require_admin)):
     result = await db.execute(select(Camera).order_by(Camera.name))
+    cameras = list(result.scalars().all())
     base = _base_url(request)
-    return [camera_to_response(c, base) for c in result.scalars().all()]
+    responses = [camera_to_response(c, base) for c in cameras]
+    await db.flush()
+    return responses
 
 
 @router.post("", response_model=CameraResponse)
@@ -221,7 +224,10 @@ async def start_learning(req: StartLearningRequest, db: AsyncSession = Depends(g
 
     room = (await db.execute(select(Room).where(Room.id == camera.room_id))).scalar_one()
     room.baseline_learned = True
-    camera.status = CameraStatus.ONLINE
+    if frame_buffer.is_live(str(camera.id)):
+        camera.status = CameraStatus.ONLINE
+    else:
+        camera.status = CameraStatus.OFFLINE
     await db.flush()
 
     detection_mode = scan_data.get("detection_mode", "yolo")
@@ -265,10 +271,12 @@ async def surveillance_status(room_id: UUID, db: AsyncSession = Depends(get_db),
     )
     session = result.scalar_one_or_none()
     cameras = (await db.execute(select(Camera).where(Camera.room_id == room_id))).scalars().all()
+    feeds_live = sum(1 for c in cameras if frame_buffer.is_live(str(c.id)))
     return {
         "active": session is not None,
         "session_id": str(session.id) if session else None,
         "cameras": len(cameras),
+        "feeds_live": feeds_live,
         "surveilling_cameras": sum(1 for c in cameras if c.status == CameraStatus.SURVEILLING),
     }
 

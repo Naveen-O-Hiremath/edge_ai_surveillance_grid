@@ -1,0 +1,11 @@
+__pycache__
+*.pyc
+.venv
+venv
+.env
+.git
+*.md
+data/evidence/*
+data/baselines/*
+*.pt
+!models/.gitkeep

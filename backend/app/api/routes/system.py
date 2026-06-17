@@ -8,11 +8,17 @@ from pathlib import Path
 
 
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+import httpx
 
-
+from app.api.deps import require_admin
 from app.config import get_settings
+from app.database import get_db
+from app.models.entities import Camera, Incident, SurveillanceSession, User
+from app.services.camera_health import is_camera_streaming, sync_camera_from_frames
 
 
 
@@ -236,6 +242,55 @@ async def network_hints(request: Request):
 
         "note": "Use your PC Wi-Fi IP (not Hyper-V vEthernet). Phone must be on the same Wi-Fi network.",
 
+    }
+
+
+@router.get("/status")
+async def system_status(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Honest aggregate health — only counts cameras that are actually streaming frames."""
+    cameras = (await db.execute(select(Camera))).scalars().all()
+    for cam in cameras:
+        sync_camera_from_frames(cam)
+    await db.flush()
+
+    streaming = sum(1 for c in cameras if is_camera_streaming(c))
+    active_sessions = (
+        await db.execute(select(SurveillanceSession).where(SurveillanceSession.is_active.is_(True)))
+    ).scalars().all()
+    open_incidents = (
+        await db.execute(select(Incident).where(Incident.status == "open"))
+    ).scalars().all()
+
+    edge_ok = False
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            r = await client.get(f"{settings.edge_ai_url}/health")
+            edge_ok = r.status_code == 200
+    except httpx.HTTPError:
+        edge_ok = False
+
+    cameras_configured = len(cameras)
+    healthy = edge_ok and (cameras_configured == 0 or streaming > 0)
+
+    return {
+        "healthy": healthy,
+        "edge_ai_reachable": edge_ok,
+        "cameras_total": cameras_configured,
+        "cameras_streaming": streaming,
+        "surveillance_sessions": len(active_sessions),
+        "open_incidents": len(open_incidents),
+        "message": (
+            "All systems ready"
+            if healthy
+            else "Start a camera publisher and keep the tab open — no live feeds detected"
+            if cameras_configured and streaming == 0
+            else "Edge AI unreachable — rebuild or restart the edge-ai container"
+            if not edge_ok
+            else "Degraded"
+        ),
     }
 
 

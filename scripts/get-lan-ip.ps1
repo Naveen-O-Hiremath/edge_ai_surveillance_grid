@@ -30,6 +30,7 @@ $payload = [ordered]@{
     lan_ip     = if ($best) { $best.IPAddress } else { $null }
     interface  = if ($best) { $best.InterfaceAlias } else { $null }
     port       = 3000
+    url        = if ($best) { "http://$($best.IPAddress):3000" } else { $null }
     updated_at = (Get-Date).ToUniversalTime().ToString("o")
     warning    = $warning
     candidates = $candidates

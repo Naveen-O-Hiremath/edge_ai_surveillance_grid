@@ -93,6 +93,18 @@ def masked_person_detected() -> tuple[str, str]:
     return title, desc
 
 
+def camera_covered() -> tuple[str, str]:
+    title = "Camera covered — possible tampering"
+    desc = f"Camera view blocked or obstructed at {_now_label()}. Lens may be covered intentionally."
+    return title, desc
+
+
+def camera_disconnected() -> tuple[str, str]:
+    title = "Camera feed offline"
+    desc = f"No video frames received at {_now_label()}. Open the camera publisher and keep it running."
+    return title, desc
+
+
 
 
 

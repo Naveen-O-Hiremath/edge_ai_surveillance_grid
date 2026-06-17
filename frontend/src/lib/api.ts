@@ -29,6 +29,8 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
 
+  getSystemStatus: () => request<SystemStatus>('/system/status'),
+
   getDashboard: () => request<DashboardData>('/analytics/dashboard'),
 
   getRooms: () => request<Room[]>('/rooms'),
@@ -111,6 +113,16 @@ export const api = {
     }),
 }
 
+export interface SystemStatus {
+  healthy: boolean
+  edge_ai_reachable: boolean
+  cameras_total: number
+  cameras_streaming: number
+  surveillance_sessions: number
+  open_incidents: number
+  message: string
+}
+
 export interface DashboardData {
   stats: {
     total_cameras: number
@@ -150,6 +162,7 @@ export interface Camera {
   is_streaming?: boolean
   status: string
   health_score: number
+  last_heartbeat?: string | null
 }
 
 export interface EnvObject {
@@ -188,6 +201,7 @@ export interface Event {
 export interface Incident {
   id: string
   title: string
+  description?: string | null
   severity: string
   risk_score: number
   status: string

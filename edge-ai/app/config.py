@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     confidence_threshold: float = 75.0
     unknown_threshold: float = 70.0
     motion_sensitivity: float = 0.02
-    frame_skip: int = 3
+    frame_skip: int = 2
 
     class Config:
         env_file = ".env"

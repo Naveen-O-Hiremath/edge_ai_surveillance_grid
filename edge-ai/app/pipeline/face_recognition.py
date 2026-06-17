@@ -88,6 +88,10 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
 
 
 
+# Hash-based pseudo-embeddings are not reliable for identity — face ID disabled until a real model is wired.
+IDENTITY_MATCHING_ENABLED = False
+
+
 class FaceRecognizer:
 
     def __init__(self):
@@ -125,92 +129,80 @@ class FaceRecognizer:
 
 
     def analyze_faces(self, frame, person_detections: list) -> list[FaceResult]:
-
         results = []
-
         for det in person_detections:
-
             if det.label != "person":
-
+                continue
+            if det.confidence < 45.0:
                 continue
 
             masked = self._detect_mask(frame, det.bbox)
-
             if masked:
-
                 results.append(
-
                     FaceResult(
-
                         person_id=None,
-
                         person_name=None,
-
                         person_role=None,
-
                         is_known=False,
-
                         is_masked=True,
-
-                        confidence=88.0,
-
+                        confidence=round(min(95.0, det.confidence * 100), 1),
                         bbox=det.bbox,
-
                     )
-
                 )
-
                 continue
 
-
+            if not IDENTITY_MATCHING_ENABLED or not self._known_persons:
+                continue
 
             known = self._match_known(frame, det.bbox)
-
-            results.append(
-
-                FaceResult(
-
-                    person_id=known.get("id") if known else None,
-
-                    person_name=known.get("name") if known else None,
-
-                    person_role=known.get("role") if known else None,
-
-                    is_known=known is not None,
-
-                    is_masked=False,
-
-                    confidence=known.get("confidence", 75.0) if known else 75.0,
-
-                    bbox=det.bbox,
-
+            if known:
+                results.append(
+                    FaceResult(
+                        person_id=known.get("id"),
+                        person_name=known.get("name"),
+                        person_role=known.get("role"),
+                        is_known=True,
+                        is_masked=False,
+                        confidence=known.get("confidence", 75.0),
+                        bbox=det.bbox,
+                    )
                 )
-
-            )
-
         return results
 
 
 
     def _detect_mask(self, frame, bbox: tuple) -> bool:
-
         if frame is None:
-
             return False
-
         x, y, w, h = [int(v) for v in bbox]
-
-        face_h = max(1, int(h * 0.4))
-
-        face_region = frame[y : y + face_h, x : x + w]
-
-        if face_region.size == 0:
-
+        if w < 40 or h < 60:
             return False
 
-        gray = cv2.cvtColor(face_region, cv2.COLOR_BGR2GRAY)
+        person_region = frame[y : y + h, x : x + w]
+        if person_region.size == 0:
+            return False
 
-        return float(np.std(gray)) < 25.0
+        gray = cv2.cvtColor(person_region, cv2.COLOR_BGR2GRAY)
+        face_h = max(1, int(h * 0.55))
+        face_region = gray[0:face_h, :]
+        if face_region.size == 0:
+            return False
+
+        texture = float(np.std(face_region))
+
+        # Uniform face region — cloth, mask, or hand over face
+        if texture < 32.0:
+            return True
+
+        # Person large enough that we should see a face, but cascade finds none
+        if self._face_cascade is not None and not self._face_cascade.empty() and h >= 100:
+            faces = self._face_cascade.detectMultiScale(
+                face_region, scaleFactor=1.08, minNeighbors=4, minSize=(28, 28)
+            )
+            if len(faces) == 0:
+                return True
+
+        return False
 
 
 

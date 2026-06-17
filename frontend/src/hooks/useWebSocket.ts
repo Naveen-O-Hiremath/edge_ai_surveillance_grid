@@ -26,6 +26,11 @@ export function useWebSocket(url: string) {
       setLastMessage(msg)
       if (msg.type === 'alert' || msg.type === 'alarm') {
         setAlerts((prev) => [msg, ...prev].slice(0, 50))
+      } else if (
+        msg.type === 'event' &&
+        ['high', 'critical'].includes(String(msg.data.severity || ''))
+      ) {
+        setAlerts((prev) => [msg, ...prev].slice(0, 50))
       }
     }
     wsRef.current = ws

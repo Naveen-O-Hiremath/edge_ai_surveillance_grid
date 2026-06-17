@@ -28,7 +28,10 @@ class EventCooldown:
 
             "unknown_person": 90.0,
 
-            "masked_person": 90.0,
+            "masked_person": 45.0,
+            "camera_covered": 20.0,
+            "camera_disconnected": 30.0,
+            "camera_tampered": 20.0,
 
             "asset_removed": 60.0,
 

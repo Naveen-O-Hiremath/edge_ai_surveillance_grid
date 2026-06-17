@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.entities import Event, EventType, KnownPerson
+from app.models.entities import Event, EventType, KnownPerson, SeverityLevel
 from app.schemas.common import EventCreate
 from app.services.alert_service import alert_service
 from app.services.event_correlator import event_correlator
@@ -57,14 +57,20 @@ class EventPipeline:
         try:
             from app.websocket import manager
 
-            await manager.broadcast({"type": "event", "data": {
+            payload = {
                 "id": str(event.id),
                 "event_type": event.event_type.value,
                 "severity": event.severity.value,
                 "title": event.title,
+                "description": event.description,
                 "risk_score": event.risk_score,
                 "created_at": event.created_at.isoformat(),
-            }})
+            }
+            is_threat = event.severity in (SeverityLevel.HIGH, SeverityLevel.CRITICAL)
+            await manager.broadcast({
+                "type": "alert" if is_threat else "event",
+                "data": payload,
+            })
         except Exception:
             pass
 

@@ -2,7 +2,8 @@
     "lan_ip":  null,
     "interface":  null,
     "port":  3000,
-    "updated_at":  "2026-06-11T20:17:06.4286124Z",
+    "url":  null,
+    "updated_at":  "2026-06-17T05:42:30.9397101Z",
     "warning":  "No active Wi-Fi or Ethernet found. Connect your PC to the same Wi-Fi as your phone, then run this script again.",
     "candidates":  [
 

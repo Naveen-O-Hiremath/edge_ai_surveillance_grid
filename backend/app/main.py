@@ -110,7 +110,13 @@ app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "service": "sentinel-backend"}
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return {"status": "healthy", "service": "sentinel-backend", "database": "ok"}
+    except Exception as exc:
+        from fastapi import HTTPException
+        raise HTTPException(503, f"Database unavailable: {exc}") from exc
 
 
 @app.websocket("/ws/live")
@@ -189,6 +195,8 @@ async def websocket_camera_publish(websocket: WebSocket, stream_token: str):
         logger.info("Camera publisher disconnected: %s", camera.name)
         async with AsyncSessionLocal() as db:
             cam = (await db.execute(select(Camera).where(Camera.id == camera.id))).scalar_one_or_none()
-            if cam and cam.status != CameraStatus.SURVEILLING:
-                cam.status = CameraStatus.OFFLINE
+            if cam:
+                cam.health_score = 0.0
+                if cam.status != CameraStatus.SURVEILLING:
+                    cam.status = CameraStatus.OFFLINE
                 await db.commit()

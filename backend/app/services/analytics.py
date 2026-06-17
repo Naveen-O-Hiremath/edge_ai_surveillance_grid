@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.entities import Camera, CameraStatus, Event, Incident, SeverityLevel
+from app.models.entities import Camera, Event, Incident, SeverityLevel
+from app.services.camera_health import is_camera_streaming
 from app.schemas.responses import (
     AnalyticsResponse,
     DashboardStats,
@@ -30,8 +31,8 @@ class AnalyticsService:
 
         stats = DashboardStats(
             total_cameras=len(cameras),
-            online_cameras=sum(1 for c in cameras if c.status == CameraStatus.ONLINE or c.status == CameraStatus.SURVEILLING),
-            active_threats=sum(1 for e in events_today if e.severity in (SeverityLevel.HIGH, SeverityLevel.CRITICAL)),
+            online_cameras=sum(1 for c in cameras if is_camera_streaming(c)),
+            active_threats=len(open_incidents),
             events_today=len(events_today),
             unknown_visitors_today=sum(1 for e in events_today if e.event_type == EventType.UNKNOWN_PERSON),
             asset_alerts_today=sum(
@@ -41,8 +42,10 @@ class AnalyticsService:
             ),
             open_incidents=len(open_incidents),
             risk_score_avg=round(
-                sum(e.risk_score for e in events_today) / max(len(events_today), 1), 1
-            ),
+                sum(i.risk_score for i in open_incidents) / max(len(open_incidents), 1), 1
+            )
+            if open_incidents
+            else 0.0,
         )
 
         timeline = self._build_timeline(events_today)
@@ -53,7 +56,11 @@ class AnalyticsService:
             severity_dist[e.severity.value] = severity_dist.get(e.severity.value, 0) + 1
 
         heatmap = self._build_heatmap(events_today)
-        top_threats = sorted(events_today, key=lambda e: e.risk_score, reverse=True)[:10]
+        threat_events = [
+            e for e in events_today
+            if e.severity in (SeverityLevel.HIGH, SeverityLevel.CRITICAL)
+        ]
+        top_threats = sorted(threat_events, key=lambda e: e.created_at, reverse=True)[:10]
 
         return AnalyticsResponse(
             stats=stats,

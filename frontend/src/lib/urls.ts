@@ -1,4 +1,4 @@
-/** Resolve API URLs — same-origin via nginx (:3000) or direct backend (:8000). */
+/** Resolve API URLs — always same-origin through nginx (:3000) or Vite dev proxy. */
 
 export function clientHost(): string {
   return window.location.hostname || 'localhost'
@@ -9,20 +9,20 @@ export function publishApiBase(): string {
   return '/api/v1'
 }
 
-/** Direct backend URL (debug / WebRTC discovery only). */
-export function backendBase(): string {
-  const host = clientHost()
-  const protocol = window.location.protocol === 'https:' ? 'https' : 'http'
-  return `${protocol}://${host}:8000`
-}
-
 export function apiBase(): string {
-  return `${backendBase()}/api/v1`
+  return '/api/v1'
 }
 
 export function wsBase(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-  return `${protocol}://${clientHost()}:8000`
+  return `${protocol}://${window.location.host}/ws`
+}
+
+/** @deprecated Direct :8000 is not exposed in Docker ship mode. */
+export function backendBase(): string {
+  const host = clientHost()
+  const protocol = window.location.protocol === 'https:' ? 'https' : 'http'
+  return `${protocol}://${host}:8000`
 }
 
 export function frontendPort(): string {

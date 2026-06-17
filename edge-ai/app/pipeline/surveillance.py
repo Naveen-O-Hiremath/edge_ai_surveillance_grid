@@ -21,22 +21,16 @@ from app.pipeline.detector import ObjectDetector
 from app.pipeline.event_cooldown import EventCooldown
 
 from app.pipeline.event_narrator import (
-
+    camera_covered,
+    camera_disconnected,
     from_state_change,
-
     masked_person_detected,
-
     person_entered,
-
     person_left,
-
     person_visit,
-
     phone_in_use,
-
-    unknown_person_detected,
-
 )
+from app.pipeline.frame_analysis import is_frame_obstructed, is_frame_valid
 
 from app.pipeline.face_recognition import FaceRecognizer
 
@@ -189,18 +183,40 @@ class SurveillanceEngine:
 
 
             frame = await get_frame(
-
                 primary_camera_id,
-
                 cam_config.get("stream_url", ""),
-
                 cam_config.get("source_type", "rtsp"),
-
             )
 
-            detections = self.detector.detect(frame)
-
             events: list[dict] = []
+
+            if not is_frame_valid(frame):
+                key = f"{room_id}:camera_disconnected"
+                if cd.allow(key, "camera_disconnected"):
+                    title, desc = camera_disconnected()
+                    events.append(self._make_event(
+                        room_id, primary_camera_id, "camera_disconnected", title, desc, 90.0,
+                    ))
+                for event in events:
+                    await self._send_event(event)
+                await asyncio.sleep(0.35)
+                continue
+
+            # Blocked lens — log immediately (do not run YOLO on unusable frames)
+            if is_frame_obstructed(frame):
+                key = f"{room_id}:camera_covered"
+                if cd.allow(key, "camera_covered"):
+                    title, desc = camera_covered()
+                    events.append(self._make_event(
+                        room_id, primary_camera_id, "camera_covered", title, desc, 96.0,
+                        metadata={"reason": "obstructed_frame"},
+                    ))
+                for event in events:
+                    await self._send_event(event)
+                await asyncio.sleep(0.35)
+                continue
+
+            detections = self.detector.detect(frame)
 
 
 
@@ -271,17 +287,11 @@ class SurveillanceEngine:
                 for fr in face_results:
 
                     if fr.is_masked:
-
                         key = f"{room_id}:masked"
-
                         if cd.allow(key, "masked_person"):
-
                             title, desc = masked_person_detected()
-
                             events.append(self._make_event(
-
                                 room_id, primary_camera_id, "masked_person", title, desc, fr.confidence,
-
                             ))
 
                     elif fr.is_known and fr.person_name:
@@ -293,28 +303,9 @@ class SurveillanceEngine:
                             title, desc = person_visit(fr.person_name, fr.person_role)
 
                             events.append(self._make_event(
-
                                 room_id, primary_camera_id, "known_person", title, desc,
-
                                 fr.confidence, person_id=fr.person_id,
-
                             ))
-
-                    elif self.face_recognizer._known_persons:
-
-                        key = f"{room_id}:unknown_person"
-
-                        if cd.allow(key, "unknown_person"):
-
-                            title, desc = unknown_person_detected()
-
-                            events.append(self._make_event(
-
-                                room_id, primary_camera_id, "unknown_person", title, desc, fr.confidence,
-
-                            ))
-
-
 
             if detect_phone_usage(persons, detections):
 
@@ -366,7 +357,7 @@ class SurveillanceEngine:
 
 
 
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(0.4)
 
 
 

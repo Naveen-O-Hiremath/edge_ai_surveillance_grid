@@ -1,13 +1,15 @@
 """Public camera publisher endpoints (token-authenticated, no login)."""
 
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.entities import Camera
+from app.models.entities import Camera, CameraStatus
+from app.services.camera_health import compute_health_score
 from app.services.frame_buffer import frame_buffer
 
 logger = logging.getLogger(__name__)
@@ -21,16 +23,21 @@ def _client_host(request: Request) -> str:
 
 @router.get("/setup")
 async def publish_setup(request: Request):
-    """Tell the browser where to send frames (direct backend :8000, not nginx)."""
+    """Return URLs for camera publisher — everything goes through port 3000 (nginx)."""
     host = _client_host(request)
     scheme = "https" if request.headers.get("x-forwarded-proto") == "https" else "http"
-    frontend_port = request.headers.get("x-forwarded-port") or "3000"
+    port = request.headers.get("x-forwarded-port") or "3000"
+    if port in ("80", "443"):
+        port = "3000"
+    origin = f"{scheme}://{host}:{port}" if port not in ("80", "443") else f"{scheme}://{host}"
+    if port == "3000":
+        origin = f"{scheme}://{host}:3000"
     return {
-        "frontend_base": f"{scheme}://{host}:{frontend_port}",
-        "backend_base": f"{scheme}://{host}:8000",
-        "api_base": f"{scheme}://{host}:8000/api/v1",
-        "ws_base": f"{'wss' if scheme == 'https' else 'ws'}://{host}:8000",
+        "frontend_base": origin,
+        "api_base": f"{origin}/api/v1",
+        "ws_base": f"{'wss' if scheme == 'https' else 'ws'}://{host}:{port}/ws",
         "client_host": host,
+        "note": "Open the dashboard on this URL. Camera frames upload via /api/v1 (same port).",
     }
 
 
@@ -68,6 +75,13 @@ async def upload_frame(
         raise HTTPException(400, f"Frame too small ({len(data)} bytes)")
 
     await frame_buffer.store(camera_id, data)
+
+    now = datetime.now(timezone.utc)
+    camera.last_heartbeat = now
+    camera.health_score = compute_health_score(camera_id)
+    if camera.status == CameraStatus.OFFLINE:
+        camera.status = CameraStatus.ONLINE
+    await db.flush()
 
     logger.debug("Frame stored for camera %s (%d bytes)", camera.name, len(data))
     return {"status": "ok", "bytes": len(data), "camera_id": camera_id}

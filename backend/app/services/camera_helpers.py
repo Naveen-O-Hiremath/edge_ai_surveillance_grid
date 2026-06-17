@@ -2,15 +2,18 @@ import secrets
 
 from app.models.entities import Camera
 from app.schemas.responses import CameraResponse
-from app.services.frame_buffer import frame_buffer
+from app.services.camera_health import is_camera_streaming, sync_camera_from_frames
 
 
 def build_publish_path(source_type: str, token: str) -> str:
     return f"/publish/{source_type}/{token}"
 
 
-def camera_to_response(camera: Camera, base_url: str = "") -> CameraResponse:
-    is_streaming = frame_buffer.is_live(str(camera.id)) if camera.source_type in ("webcam", "mobile") else False
+def camera_to_response(camera: Camera, base_url: str = "", *, sync: bool = True) -> CameraResponse:
+    if sync:
+        sync_camera_from_frames(camera)
+
+    is_streaming = is_camera_streaming(camera)
     publish_path = None
     publish_url = None
     if camera.stream_token and camera.source_type in ("webcam", "mobile"):
@@ -27,7 +30,7 @@ def camera_to_response(camera: Camera, base_url: str = "") -> CameraResponse:
         publish_path=publish_path,
         publish_url=publish_url,
         status=camera.status,
-        health_score=camera.health_score,
+        health_score=round(camera.health_score, 1),
         last_heartbeat=camera.last_heartbeat,
         position=camera.position,
         is_streaming=is_streaming,

@@ -59,7 +59,7 @@ export default function Persons() {
 
       {success && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4" /> Person registered successfully with 5 face embeddings
+          <CheckCircle2 className="w-4 h-4" /> Person registered — photos saved (face matching uses basic detection until InsightFace is enabled)
         </motion.div>
       )}
 

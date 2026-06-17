@@ -24,8 +24,49 @@ INTRUSION_CHAIN = [
 ]
 
 
+IMMEDIATE_INCIDENTS: dict[EventType, tuple[str, str, SeverityLevel, float]] = {
+    EventType.CAMERA_COVERED: (
+        "Camera Covered — Tampering Suspected",
+        "The camera view was blocked. Possible intentional obstruction or tampering.",
+        SeverityLevel.CRITICAL,
+        98.0,
+    ),
+    EventType.CAMERA_DISCONNECTED: (
+        "Camera Feed Lost",
+        "No video frames received from the camera publisher.",
+        SeverityLevel.HIGH,
+        85.0,
+    ),
+    EventType.CAMERA_TAMPERED: (
+        "Camera Tampered",
+        "Camera tampering or interference detected.",
+        SeverityLevel.CRITICAL,
+        96.0,
+    ),
+    EventType.MASKED_PERSON: (
+        "Masked Individual Detected",
+        "A masked or face-covered individual was detected on a live camera feed.",
+        SeverityLevel.CRITICAL,
+        95.0,
+    ),
+}
+
+
 class EventCorrelator:
     async def process_event(self, db: AsyncSession, event: Event) -> Incident | None:
+        immediate = IMMEDIATE_INCIDENTS.get(event.event_type)
+        if immediate:
+            title, default_desc, severity, risk = immediate
+            return await self._create_incident(
+                db,
+                room_id=event.room_id,
+                title=title,
+                description=event.description or default_desc,
+                severity=severity,
+                risk_score=risk,
+                event_ids=[event.id],
+            )
+
         recent = await self._get_recent_events(db, event.room_id, seconds=CORRELATION_WINDOW_SECONDS)
         recent_types = [e.event_type for e in recent] + [event.event_type]
 
@@ -49,17 +90,6 @@ class EventCorrelator:
                 severity=SeverityLevel.HIGH,
                 risk_score=78.0,
                 event_ids=[e.id for e in recent] + [event.id],
-            )
-
-        if event.event_type == EventType.MASKED_PERSON:
-            return await self._create_incident(
-                db,
-                room_id=event.room_id,
-                title="Masked Individual Detected",
-                description=event.description or "A masked or face-covered individual was detected.",
-                severity=SeverityLevel.CRITICAL,
-                risk_score=95.0,
-                event_ids=[event.id],
             )
 
         return None

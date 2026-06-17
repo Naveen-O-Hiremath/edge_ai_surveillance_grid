@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, AlertTriangle } from 'lucide-react'
+import { Shield, AlertTriangle, Radio } from 'lucide-react'
 import SeverityBadge from '../components/SeverityBadge'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { api, type Incident } from '../lib/api'
@@ -9,46 +9,58 @@ export default function ThreatCenter() {
   const { alerts } = useWebSocket('/ws/live')
   const [incidents, setIncidents] = useState<Incident[]>([])
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     api.getIncidents().then(setIncidents).catch(console.error)
-    const interval = setInterval(() => api.getIncidents().then(setIncidents).catch(console.error), 10000)
-    return () => clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    refresh()
+    const interval = setInterval(refresh, 5000)
+    return () => clearInterval(interval)
+  }, [refresh])
 
   return (
     <div className="p-6 space-y-6">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Threat Center</h2>
-        <p className="text-gray-400 text-sm mt-1">Correlated incidents and live threat alerts</p>
+        <p className="text-gray-400 text-sm mt-1">Real-time alerts from active surveillance — only when a camera feed is live</p>
       </div>
 
-      {alerts.length > 0 && (
+      {alerts.length > 0 ? (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
           <h3 className="font-semibold text-threat-critical flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4" /> Live Alerts
+            <Radio className="w-4 h-4" /> Live Alerts
           </h3>
-          {alerts.slice(0, 5).map((alert, i) => (
+          {alerts.slice(0, 8).map((alert, i) => (
             <div key={i} className="glass-card p-4 border-threat-critical/30 animate-pulse-slow">
               <div className="flex items-center justify-between">
-                <p className="font-medium">{(alert.data.title as string) || 'Alert'}</p>
+                <p className="font-medium">{(alert.data.title as string) || 'Threat detected'}</p>
                 <SeverityBadge severity={(alert.data.severity as string) || 'high'} />
               </div>
-              <p className="text-xs text-gray-400 mt-1">Risk: {alert.data.risk_score as number}</p>
+              {(alert.data.description as string) && (
+                <p className="text-sm text-gray-400 mt-1">{alert.data.description as string}</p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">Risk: {alert.data.risk_score as number}</p>
             </div>
           ))}
         </motion.div>
+      ) : (
+        <div className="glass-card p-6 text-center text-gray-500 text-sm">
+          <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-gray-600" />
+          No live threats right now. Cover the camera or wear a mask in view while surveillance is active to test.
+        </div>
       )}
 
       <div className="space-y-3">
         <h3 className="font-semibold flex items-center gap-2">
-          <Shield className="w-4 h-4 text-sentinel-400" /> Correlated Incidents
+          <Shield className="w-4 h-4 text-sentinel-400" /> Open Incidents
         </h3>
         {incidents.length ? incidents.map((inc) => (
           <motion.div key={inc.id} className="glass-card-hover p-5">
             <div className="flex items-start justify-between">
               <div>
                 <h4 className="font-semibold">{inc.title}</h4>
-                <p className="text-sm text-gray-400 mt-1">{inc.ai_summary || inc.title}</p>
+                <p className="text-sm text-gray-400 mt-1">{inc.description || inc.ai_summary || inc.title}</p>
                 <p className="text-xs text-gray-500 mt-2">
                   Started: {new Date(inc.started_at).toLocaleString()} · Status: {inc.status}
                 </p>
@@ -60,7 +72,7 @@ export default function ThreatCenter() {
             </div>
           </motion.div>
         )) : (
-          <p className="text-gray-500 text-center py-12">No open incidents — all clear</p>
+          <p className="text-gray-500 text-center py-12">No open incidents</p>
         )}
       </div>
     </div>
