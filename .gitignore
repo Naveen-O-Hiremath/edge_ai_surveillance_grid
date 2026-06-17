@@ -11,7 +11,8 @@ data/evidence/*
 data/baselines/*
 !data/evidence/.gitkeep
 !data/baselines/.gitkeep
-models/
+# YOLO weight files only — do NOT use models/ (that ignores backend/app/models/)
+edge-ai/models/
 *.pt
 .DS_Store
 mobile/.dart_tool/
